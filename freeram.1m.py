@@ -168,7 +168,7 @@ def menu():
         print("---")
         print(f'Stop local MLX server   {size(mem_mlx)} | sfimage=cpu bash="{SELF}" param1=unload-mlx terminal=false refresh=true')
     print("---")
-    print("Stopping keeps the conversation: resume with claude attach <id> | size=11 color=#8E8E93")
+    print("Stopped sessions stay in your Claude Code agent list. Open one there to continue. | size=11 color=#8E8E93")
 
 
 def stop(sid):
@@ -176,9 +176,9 @@ def stop(sid):
     if not s or s.get("kind") == "interactive":  # never stop an interactive session, even if asked
         return
     name = s.get("name") or sid
-    if confirm(f"Stop \"{name}\" ({s.get('state', '?')})?\n\nThe conversation is kept. Resume it any time with:\nclaude attach {sid}", "Stop"):
+    if confirm(f"Stop \"{name}\" ({s.get('state', '?')})?\n\nThis frees its memory. The conversation stays in your Claude Code agent list, so you can open it again from there (or run claude attach {sid}).", "Stop"):
         if act([CLAUDE, "stop", sid]):
-            notify(f"Stopped \"{name}\". Resume with: claude attach {sid}")
+            notify(f"Stopped \"{name}\". It stays in your agent list to open again.")
 
 
 def mlx_pids():

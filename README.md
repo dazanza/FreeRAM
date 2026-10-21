@@ -14,7 +14,7 @@ Background sessions keep running after you stop looking at them. Each one holds 
 
 - **Menu bar:** a level meter and the percentage of RAM in use, measured the same way as Activity Monitor's "Memory Used" (app + wired + compressed). It turns orange when macOS reports memory pressure "Warning" and red at "Critical".
 - **Menu:** memory, swap and pressure, then every background Claude Code session, largest first, with its size, age and state (working, done, blocked, idle).
-- **Stop a session:** click it, confirm, and FreeRAM runs `claude stop <id>`. The conversation is kept. Resume it with `claude attach <id>`.
+- **Stop a session:** click it, confirm, and FreeRAM runs `claude stop <id>`. This frees its memory. The session stays in Claude Code's agent list, so you can open it again from there, or run `claude attach <id>`.
 - **Safe by default:** interactive sessions (the ones open in a terminal) are never listed and are never stopped. Every stop asks first.
 - **Accurate sizes:** each session's size includes its MCP server child processes, and uses macOS's physical footprint (from `top`), so GPU memory counts. `ps` RSS misses it.
 
