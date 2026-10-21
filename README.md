@@ -1,6 +1,6 @@
 # FreeRAM
 
-A macOS menu bar gauge for people who run Claude Code background sessions on a low-RAM Mac.
+A macOS menu bar gauge for people who run Claude Code (the command-line tool) background sessions on a low-RAM Mac.
 
 Background sessions keep running after you stop looking at them. Each one holds roughly 1 GB (the CLI plus its MCP servers) until it is stopped. On a 16 GB machine, four or five forgotten sessions push you into swap and everything slows down. A restart frees the memory only by killing everything. FreeRAM shows how full your memory is, which sessions are holding it, and lets you stop one with a click. The conversation is kept, so you can pick it up again later.
 
@@ -61,4 +61,4 @@ FREERAM_DRY_RUN=1 ./freeram.1m.py stop <id>  # shows the dialog. Stop only print
 
 ## License
 
-MIT
+MIT with the [Commons Clause](https://commonsclause.com/). You can use, change and share FreeRAM, including at work. You can't sell it, or sell a product or service whose value comes mainly from it. See [LICENSE](LICENSE).
