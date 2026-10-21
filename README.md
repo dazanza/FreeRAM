@@ -34,7 +34,7 @@ It refreshes every minute and every time you open the menu.
 
    ```sh
    cd "$(defaults read com.ameba.SwiftBar PluginDirectory)"
-   curl -fsSLO https://raw.githubusercontent.com/dazanza/claude-freeram/main/freeram.1m.py
+   curl -fsSLO https://raw.githubusercontent.com/dazanza/FreeRAM/main/freeram.1m.py
    chmod +x freeram.1m.py
    ```
 
