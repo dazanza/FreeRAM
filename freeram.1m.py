@@ -32,7 +32,7 @@ DEMO = [(2410, {"id": "a1b2c3d4", "name": "refactor auth module", "state": "work
 
 
 def run(*cmd):
-    return subprocess.run(cmd, capture_output=True, text=True).stdout
+    return subprocess.run(cmd, capture_output=True, text=True, timeout=10).stdout
 
 
 def mb(s):
