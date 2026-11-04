@@ -99,6 +99,11 @@ def background(sessions):
     return [s for s in sessions if s.get("kind") != "interactive"]
 
 
+def find(sessions, sid):
+    # interactive sessions carry no "id" key; s["id"] crashed stop() before its dialog showed
+    return next((s for s in sessions if s.get("id") == sid), None)
+
+
 def sessions():
     return json.loads(run(CLAUDE, "agents", "--json") or "[]") if CLAUDE else []
 
@@ -172,7 +177,7 @@ def menu():
 
 
 def stop(sid):
-    s = next((s for s in sessions() if s["id"] == sid), None)
+    s = find(sessions(), sid)
     if not s or s.get("kind") == "interactive":  # never stop an interactive session, even if asked
         return
     name = s.get("name") or sid
@@ -195,6 +200,7 @@ def unload_mlx():
 def selftest():
     assert parse_top("PID  MEM\n101  1234M\n102  2.5G\n103  512K\n104  80M+\n") == {101: 1234, 102: 2560, 103: 0.5, 104: 80}
     assert [s["id"] for s in background([{"id": "a", "kind": "background"}, {"id": "b", "kind": "interactive"}, {"id": "c"}])] == ["a", "c"]
+    assert find([{"kind": "interactive", "name": "x"}, {"id": "a", "kind": "background"}], "a")["id"] == "a"
     vm = "Mach Virtual Memory Statistics: (page size of 16384 bytes)\nPages wired down:  10.\nPages purgeable:  2.\nAnonymous pages:  20.\nPages occupied by compressor:  5.\n"
     assert ram_used(vm) == 33 * 16384
     assert [age(e) for e in ("05:09", "2:14:03", "1-03:20:11")] == ["5m", "2h 14m", "1d 3h"]
