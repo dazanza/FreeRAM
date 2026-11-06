@@ -42,6 +42,18 @@ It refreshes every minute and every time you open the menu.
 
 To start it at login, turn on SwiftBar's own "Launch at login" setting.
 
+## From a terminal (or over SSH)
+
+Copy the script onto your PATH, then run `freeram`. Use a copy, not a symlink, if the repo lives on an external drive: over SSH, macOS blocks remote logins from reading external drives, so Python hangs silently opening the script. Re-copy after changing it.
+
+```bash
+cp freeram.1m.py ~/.local/bin/freeram
+freeram          # numbered list of sessions, MLX server and booted iOS Simulator; asks what to stop
+freeram cli | cat   # list only, no prompt
+```
+
+Type the numbers to stop (`1 3`, or `all`). Press Enter or Ctrl-D to stop nothing. Confirmations happen in the terminal, not as a dialog on the Mac's screen.
+
 ## Stop or remove
 
 - Pause: click it, then **Disable Plugin**. Turn it back on with `open "swiftbar://enableplugin?name=freeram"`.

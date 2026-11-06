@@ -13,6 +13,8 @@ Claude Code sessions, largest first, and stops one after a one-click confirm.
   freeram.1m.py stop <id>     confirm, then `claude stop <id>` (the conversation is kept)
   freeram.1m.py unload-mlx    confirm, then stop a local mlx_lm.server (only listed while one runs)
   freeram.1m.py --selftest
+  freeram [cli]               from a terminal (incl. SSH): numbered list, then asks what to stop
+                              (sessions, MLX server, booted iOS Simulator); `freeram cli | cat` = list only
 FREERAM_DRY_RUN=1 prints the stop/unload command instead of running it.
 FREERAM_DEMO=1 shows sample sessions (for screenshots).
 """
@@ -109,6 +111,8 @@ def sessions():
 
 
 def confirm(msg, button):
+    if sys.stdin.isatty():  # terminal / SSH: a dialog would pop up on the Mini's screen instead
+        return input(f"{msg}\n{button}? [y/N] ").strip().lower() in ("y", "yes")
     r = subprocess.run(["/usr/bin/osascript", "-e", "on run argv",
                         "-e", f'display dialog (item 1 of argv) with title "FreeRAM" buttons {{"Cancel", "{button}"}} default button "{button}" cancel button "Cancel"',
                         "-e", "end run", msg], capture_output=True)
@@ -116,6 +120,8 @@ def confirm(msg, button):
 
 
 def notify(msg):
+    if sys.stdin.isatty():
+        return print(msg)
     subprocess.run(["/usr/bin/osascript", "-e", "on run argv", "-e", 'display notification (item 1 of argv) with title "FreeRAM"',
                     "-e", "end run", msg], capture_output=True)
 
@@ -127,8 +133,71 @@ def act(cmd):
     return subprocess.run(cmd).returncode == 0
 
 
-def menu():
+def session_rows():
+    # [(MB, session, etime)] largest first, plus the pid->MB map
+    mem = parse_top(run("/usr/bin/top", "-l", "1", "-o", "mem", "-n", "300", "-stats", "pid,mem"))
+
+    def tree(pid):  # session + its MCP server children
+        return mem.get(pid, 0) + sum(tree(int(k)) for k in run("/usr/bin/pgrep", "-P", str(pid)).split())
+
+    ages = dict(l.split(None, 1) for l in run("/bin/ps", "-axo", "pid=,etime=").strip().splitlines())
+    rows = sorted(((tree(int(s["pid"])), s, ages.get(str(s["pid"]), "0:00")) for s in background(sessions())),
+                  key=lambda r: -r[0])
+    return rows, mem
+
+
+def booted_sims():
+    out = run("/usr/bin/xcrun", "simctl", "list", "devices", "booted") if os.path.exists("/usr/bin/xcrun") else ""
+    return [l.strip() for l in out.splitlines() if "(Booted)" in l]
+
+
+def pick(answer, n):
+    # "1 3", "1,3", "all" -> zero-based indexes; bad tokens are ignored
+    if answer.strip().lower() == "all":
+        return list(range(n))
+    return sorted({int(t) - 1 for t in re.split(r"[,\s]+", answer.strip()) if t.isdigit() and 0 < int(t) <= n})
+
+
+def cli():
     total = int(run("/usr/sbin/sysctl", "-n", "hw.memsize"))
+    used = ram_used(run("/usr/bin/vm_stat"))
+    label = PRESSURE.get(int(run("/usr/sbin/sysctl", "-n", "kern.memorystatus_vm_pressure_level") or 1), PRESSURE[1])[0]
+    swap = re.search(r"used = ([\d.]+)M", run("/usr/sbin/sysctl", "-n", "vm.swapusage"))
+    print(f"Memory {used / 2**30:.1f} of {total / 2**30:.0f} GB used · swap {float(swap.group(1)) / 1024 if swap else 0:.1f} GB · pressure {label}\n")
+    try:
+        rows, mem = session_rows()
+    except subprocess.TimeoutExpired:
+        # over SSH, macOS blocks reads of external drives and iCloud, where Claude keeps session files
+        return print("`claude agents` didn't answer in 10s. Over SSH this means macOS is blocking access to the drive\n"
+                     "or iCloud folder where Claude keeps its sessions. Fix: System Settings > General > Sharing >\n"
+                     "Remote Login (i) > turn on \"Allow full disk access for remote users\", then log in again.")
+    me =os.environ.get("CLAUDE_SESSION_ID", "")[:8]
+    rows = [r for r in rows if r[1].get("id") != me]  # never offer the session running this
+    items = [(f'{s.get("name") or s["id"]}  {size(m)} · {age(et)} · {s.get("state", "?")}', [CLAUDE, "stop", s["id"]]) for m, s, et in rows]
+    mlx = mlx_pids()
+    if mlx:
+        items.append((f"Local MLX model server  {size(sum(mem.get(int(p), 0) for p in mlx))}", ["/bin/kill", *mlx]))
+    sims = booted_sims()
+    if sims:
+        items.append((f"iOS Simulator ({len(sims)} booted, ~1.5-3.5 GB; stops any app test in it)", ["/usr/bin/xcrun", "simctl", "shutdown", "all"]))
+    if not items:
+        return print("Nothing to free: no background sessions, MLX model or Simulator running.")
+    for i, (text, _) in enumerate(items, 1):
+        print(f"  {i}. {text}")
+    print("\nStopped sessions stay in your Claude Code agent list; open one there to continue.")
+    if not sys.stdin.isatty():
+        return
+    try:
+        answer = input("Stop which? (numbers like 1 3, 'all', Enter for none) ")
+    except (EOFError, KeyboardInterrupt):  # Ctrl-D / Ctrl-C = stop nothing
+        return print()
+    for i in pick(answer, len(items)):
+        text, cmd = items[i]
+        print(("Stopped: " if act(cmd) else "FAILED: ") + text.split("  ")[0])
+
+
+def menu():
+    total =int(run("/usr/sbin/sysctl", "-n", "hw.memsize"))
     used = ram_used(run("/usr/bin/vm_stat"))
     level = int(run("/usr/sbin/sysctl", "-n", "kern.memorystatus_vm_pressure_level") or 1)
     label, rgb = PRESSURE.get(level, PRESSURE[1])
@@ -143,17 +212,9 @@ def menu():
     print(f"Pressure  {label} | sfimage=gauge.with.dots.needle.33percent")
     print("---")
 
-    if os.environ.get("FREERAM_DEMO"):
-        rows = DEMO
-    else:
-        mem = parse_top(run("/usr/bin/top", "-l", "1", "-o", "mem", "-n", "300", "-stats", "pid,mem"))
-
-        def tree(pid):  # session + its MCP server children
-            return mem.get(pid, 0) + sum(tree(int(k)) for k in run("/usr/bin/pgrep", "-P", str(pid)).split())
-
-        ages = dict(l.split(None, 1) for l in run("/bin/ps", "-axo", "pid=,etime=").strip().splitlines())
-        rows = sorted(((tree(int(s["pid"])), s, ages.get(str(s["pid"]), "0:00")) for s in background(sessions())),
-                      key=lambda r: -r[0])
+    rows, mem = DEMO, {}
+    if not os.environ.get("FREERAM_DEMO"):
+        rows, mem = session_rows()
 
     if not CLAUDE:
         print("Claude Code CLI not found | color=#8E8E93")
@@ -205,6 +266,7 @@ def selftest():
     assert ram_used(vm) == 33 * 16384
     assert [age(e) for e in ("05:09", "2:14:03", "1-03:20:11")] == ["5m", "2h 14m", "1d 3h"]
     assert size(870) == "870 MB" and size(2410) == "2.4 GB"
+    assert pick("1 3", 4) == [0, 2] and pick("2,2, 9 x", 4) == [1] and pick("all", 3) == [0, 1, 2] and pick("", 3) == []
     png = bar_png(0.5)
     assert png.startswith(b"\x89PNG") and struct.unpack(">II", png[16:24]) == (62, 28)
     print("selftest ok")
@@ -218,5 +280,7 @@ if __name__ == "__main__":
         unload_mlx()
     elif a[:1] == ["--selftest"]:
         selftest()
+    elif a[:1] == ["cli"] or sys.stdout.isatty() or os.environ.get("SSH_CONNECTION"):  # SwiftBar pipes stdout; `ssh mini freeram` has no tty either
+        cli()
     else:
         menu()
